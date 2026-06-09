@@ -41,3 +41,14 @@ textarea {
   background: var(--accent);
   color: #ffffff;
 }
+
+img,
+svg,
+video,
+canvas {
+  max-width: 100%;
+}
+
+section {
+  overflow-x: clip;
+}
