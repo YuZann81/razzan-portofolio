@@ -13,8 +13,27 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Razzan Gianni",
-  description: "Personal portfolio of Razzan Gianni.",
+  title: {
+    default: "Razzan Gianni",
+    template: "%s | Razzan Gianni",
+  },
+  description: "Personal portfolio of Razzan Gianni, a software engineering student focused on web development, interface design, and practical digital products.",
+  keywords: ["Razzan Gianni", "portfolio", "web developer", "software engineering student", "Next.js", "Laravel", "Tailwind CSS"],
+  authors: [{ name: "Razzan Gianni" }],
+  creator: "Razzan Gianni",
+  metadataBase: new URL("https://razzan.site"),
+  openGraph: {
+    title: "Razzan Gianni",
+    description: "Personal portfolio of Razzan Gianni, focused on web development, interface design, and practical digital products.",
+    url: "https://razzan.site",
+    siteName: "Razzan Gianni",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Razzan Gianni",
+    description: "Personal portfolio of Razzan Gianni, focused on web development, interface design, and practical digital products.",
+  },
 };
 
 export default function RootLayout({
