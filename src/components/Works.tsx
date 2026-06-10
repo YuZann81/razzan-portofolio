@@ -1,24 +1,4 @@
-const works = [
-  {
-    number: "01",
-    title: "Sinekat",
-    type: "school platform",
-    description: "A school information platform concept for announcements, forums, learning materials, assignments, and communication.",
-  },
-  {
-    number: "02",
-    title: "CiviLens",
-    type: "public solution platform",
-    description: "An AI-assisted public complaint platform concept with community-driven solution voting and urgency review.",
-  },
-  {
-    number: "03",
-    title: "ATM CLI",
-    type: "c++ project",
-    description: "A command-line ATM simulation using arrays, functions, account data, PIN validation, transfer, and balance checking.",
-  },
-];
-
+import { works } from "@/data/works";
 export default function Works() {
   return (
     <section id="works" className="border-t border-[var(--border)] bg-white px-4 py-16 md:px-10 md:py-24">
