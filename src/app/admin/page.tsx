@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useSyncExternalStore } from "react";
 import Link from "next/link";
 import {
   Shield,
@@ -54,19 +54,24 @@ const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
   Cpu,
 };
 
+function subscribeStorage(callback: () => void) {
+  window.addEventListener("storage", callback);
+  return () => window.removeEventListener("storage", callback);
+}
+
+function getStoredToken() {
+  return typeof window !== "undefined" ? sessionStorage.getItem("razzan_admin_token") || "" : "";
+}
+
+function getServerToken() {
+  return "";
+}
+
 export default function AdminPage() {
-  const [token, setToken] = useState<string>(() => {
-    if (typeof window !== "undefined") {
-      return sessionStorage.getItem("razzan_admin_token") || "";
-    }
-    return "";
-  });
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
-    if (typeof window !== "undefined") {
-      return Boolean(sessionStorage.getItem("razzan_admin_token"));
-    }
-    return false;
-  });
+  const storedToken = useSyncExternalStore(subscribeStorage, getStoredToken, getServerToken);
+  const [tokenOverride, setTokenOverride] = useState<string>("");
+  const token = tokenOverride || storedToken;
+  const isAuthenticated = Boolean(token);
 
   const [pin, setPin] = useState("");
   const [showPin, setShowPin] = useState(false);
@@ -145,9 +150,9 @@ export default function AdminPage() {
 
       const data = await res.json();
       if (res.ok && data.success) {
-        setToken(data.token);
-        setIsAuthenticated(true);
+        setTokenOverride(data.token);
         sessionStorage.setItem("razzan_admin_token", data.token);
+        window.dispatchEvent(new Event("storage"));
       } else {
         setAuthError(data.error || "Invalid Access Credentials");
       }
@@ -157,9 +162,9 @@ export default function AdminPage() {
   };
 
   const handleLogout = () => {
-    setIsAuthenticated(false);
-    setToken("");
+    setTokenOverride("");
     sessionStorage.removeItem("razzan_admin_token");
+    window.dispatchEvent(new Event("storage"));
     setPin("");
   };
 
@@ -230,10 +235,10 @@ export default function AdminPage() {
   // Load active tab data
   useEffect(() => {
     if (!isAuthenticated) return;
-    let isMounted = true;
+    let isRunning = true;
 
     const loadData = async () => {
-      if (!isMounted) return;
+      if (!isRunning) return;
       if (activeTab === "analytics") await fetchAnalytics();
       if (activeTab === "projects") await fetchProjects();
       if (activeTab === "techstack") await fetchTechStack();
@@ -243,7 +248,7 @@ export default function AdminPage() {
     loadData();
 
     return () => {
-      isMounted = false;
+      isRunning = false;
     };
   }, [isAuthenticated, activeTab, fetchAnalytics, fetchProjects, fetchTechStack, fetchMessages]);
 
@@ -414,8 +419,9 @@ export default function AdminPage() {
 
       const data = await res.json();
       if (res.ok && data.success) {
-        setToken(data.newToken);
+        setTokenOverride(data.newToken);
         sessionStorage.setItem("razzan_admin_token", data.newToken);
+        window.dispatchEvent(new Event("storage"));
         setSecurityStatus({ type: "success", text: "Master PIN updated successfully! Store your new PIN securely." });
         setCurrentPinInput("");
         setNewPinInput("");
@@ -430,7 +436,7 @@ export default function AdminPage() {
 
   const unreadCount = messages.filter((m) => !m.read).length;
 
-  // --- LOGIN VIEW ---
+  // Render Login Gate when not authenticated
   if (!isAuthenticated) {
     return (
       <main className="min-h-screen w-full bg-[#080808] text-[#f4f4f5] flex items-center justify-center p-4">
