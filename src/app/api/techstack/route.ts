@@ -4,7 +4,7 @@ import { getAllTechStack, saveTechStackItem, getAdminPin } from "@/lib/db";
 export async function GET() {
   try {
     const items = getAllTechStack();
-    return NextResponse.json({ success: true, items });
+    return NextResponse.json({ success: true, items, data: items });
   } catch (err: unknown) {
     const errorMessage = err instanceof Error ? err.message : "Internal Server Error";
     return NextResponse.json({ success: false, error: errorMessage }, { status: 500 });
@@ -41,7 +41,7 @@ export async function POST(request: Request) {
       sortOrder: Number(sortOrder) || 99,
     });
 
-    return NextResponse.json({ success: true, item: saved });
+    return NextResponse.json({ success: true, item: saved, data: saved });
   } catch (err: unknown) {
     const errorMessage = err instanceof Error ? err.message : "Internal Server Error";
     return NextResponse.json({ success: false, error: errorMessage }, { status: 500 });

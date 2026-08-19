@@ -4,7 +4,7 @@ import { getAnalyticsSummary, clearAnalytics } from "@/lib/db";
 export async function GET() {
   try {
     const summary = getAnalyticsSummary();
-    return NextResponse.json({ success: true, data: summary });
+    return NextResponse.json({ success: true, analytics: summary, data: summary });
   } catch {
     return NextResponse.json({ success: false, error: "Failed to load analytics" }, { status: 500 });
   }

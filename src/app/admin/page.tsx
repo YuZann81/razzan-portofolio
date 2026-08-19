@@ -177,8 +177,8 @@ export default function AdminPage() {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
-      if (data.success) {
-        setAnalytics(data.analytics);
+      if (data && data.success) {
+        setAnalytics(data.analytics || data.data || null);
       }
     } catch {
       // Ignore
@@ -192,8 +192,9 @@ export default function AdminPage() {
     try {
       const res = await fetch("/api/projects");
       const data = await res.json();
-      if (data.success) {
-        setProjects(data.projects);
+      if (data && data.success) {
+        const list = Array.isArray(data.projects) ? data.projects : Array.isArray(data.data) ? data.data : [];
+        setProjects(list);
       }
     } catch {
       // Ignore
@@ -205,8 +206,9 @@ export default function AdminPage() {
     try {
       const res = await fetch("/api/techstack");
       const data = await res.json();
-      if (data.success) {
-        setTechStack(data.items);
+      if (data && data.success) {
+        const list = Array.isArray(data.items) ? data.items : Array.isArray(data.data) ? data.data : [];
+        setTechStack(list);
       }
     } catch {
       // Ignore
@@ -222,8 +224,9 @@ export default function AdminPage() {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
-      if (data.success) {
-        setMessages(data.messages);
+      if (data && data.success) {
+        const list = Array.isArray(data.messages) ? data.messages : Array.isArray(data.data) ? data.data : [];
+        setMessages(list);
       }
     } catch {
       // Ignore
@@ -434,7 +437,10 @@ export default function AdminPage() {
     }
   };
 
-  const unreadCount = messages.filter((m) => !m.read).length;
+  const safeProjects = Array.isArray(projects) ? projects : [];
+  const safeTechStack = Array.isArray(techStack) ? techStack : [];
+  const safeMessages = Array.isArray(messages) ? messages : [];
+  const unreadCount = safeMessages.filter((m) => !m.read).length;
 
   // Render Login Gate when not authenticated
   if (!isAuthenticated) {
@@ -770,10 +776,10 @@ export default function AdminPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-neutral-800/60 text-neutral-300">
-                      {projects
+                      {safeProjects
                         .filter((p) =>
-                          p.title.toLowerCase().includes(projectSearch.toLowerCase()) ||
-                          p.slug.toLowerCase().includes(projectSearch.toLowerCase())
+                          (p.title || "").toLowerCase().includes(projectSearch.toLowerCase()) ||
+                          (p.slug || "").toLowerCase().includes(projectSearch.toLowerCase())
                         )
                         .map((p) => (
                           <tr key={p.id} className="hover:bg-neutral-900/30">
@@ -785,12 +791,12 @@ export default function AdminPage() {
                             <td className="p-3 text-neutral-400">{p.role}</td>
                             <td className="p-3 text-neutral-400">
                               <div className="flex flex-wrap gap-1">
-                                {p.tags.slice(0, 3).map((t) => (
+                                {(p.tags || []).slice(0, 3).map((t) => (
                                   <span key={t} className="border border-neutral-800 bg-neutral-900 px-1.5 py-0.5 text-[9px]">
                                     {t}
                                   </span>
                                 ))}
-                                {p.tags.length > 3 && <span className="text-[9px]">+{p.tags.length - 3}</span>}
+                                {(p.tags || []).length > 3 && <span className="text-[9px]">+{p.tags.length - 3}</span>}
                               </div>
                             </td>
                             <td className="p-3">
@@ -1040,7 +1046,7 @@ export default function AdminPage() {
                       proficiency: 90,
                       specialization: "",
                       desc: "",
-                      sortOrder: techStack.length + 1,
+                      sortOrder: safeTechStack.length + 1,
                     });
                     setIsCreatingTech(true);
                     setEditingTech(null);
@@ -1069,7 +1075,7 @@ export default function AdminPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-neutral-800/60 text-neutral-300">
-                    {techStack.map((t) => {
+                    {safeTechStack.map((t) => {
                       const IconComp = ICON_MAP[t.iconName] || Cpu;
                       return (
                         <tr key={t.id} className="hover:bg-neutral-900/30">
@@ -1310,7 +1316,7 @@ export default function AdminPage() {
 
             {/* Messages Stream */}
             <div className="space-y-3 font-mono text-xs">
-              {messages.length === 0 ? (
+              {safeMessages.length === 0 ? (
                 <div className="border border-neutral-800 bg-[#121212] p-12 text-center text-neutral-500">
                   <Inbox className="mx-auto h-8 w-8 text-neutral-600 mb-2" />
                   <div>No transmissions logged yet.</div>
@@ -1319,11 +1325,11 @@ export default function AdminPage() {
                   </div>
                 </div>
               ) : (
-                messages
+                safeMessages
                   .filter((m) =>
-                    m.name.toLowerCase().includes(messageSearch.toLowerCase()) ||
-                    m.email.toLowerCase().includes(messageSearch.toLowerCase()) ||
-                    m.message.toLowerCase().includes(messageSearch.toLowerCase())
+                    (m.name || "").toLowerCase().includes(messageSearch.toLowerCase()) ||
+                    (m.email || "").toLowerCase().includes(messageSearch.toLowerCase()) ||
+                    (m.message || "").toLowerCase().includes(messageSearch.toLowerCase())
                   )
                   .map((m) => (
                     <div

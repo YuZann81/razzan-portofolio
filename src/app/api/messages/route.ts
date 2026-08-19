@@ -11,7 +11,7 @@ export async function GET(request: Request) {
     }
 
     const messages = getAllMessages();
-    return NextResponse.json({ success: true, messages });
+    return NextResponse.json({ success: true, messages, data: messages });
   } catch (err: unknown) {
     const errorMessage = err instanceof Error ? err.message : "Internal Server Error";
     return NextResponse.json({ success: false, error: errorMessage }, { status: 500 });
