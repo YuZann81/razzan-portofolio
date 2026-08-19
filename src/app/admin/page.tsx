@@ -1,69 +1,136 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import {
   Shield,
+  Eye,
+  EyeOff,
   Activity,
   FolderGit2,
-  Users,
-  Eye,
+  Cpu,
+  Mail,
+  Lock,
   Plus,
   Trash2,
   Edit,
-  Check,
   ExternalLink,
-  Lock,
-  Globe,
-  Smartphone,
-  Monitor,
   RefreshCw,
+  Search,
+  X,
+  KeyRound,
+  Inbox,
+  Send,
   Clock,
-  RotateCcw,
 } from "lucide-react";
-import { Project, PROJECTS as INITIAL_PROJECTS } from "@/data/works";
-import { AnalyticsSummary } from "@/lib/db";
-import { useSoundFX } from "@/hooks/useSoundFX";
+import { Project } from "@/data/works";
+import { TechStackItem, ContactMessage, AnalyticsSummary } from "@/lib/db";
+import {
+  TypeScriptIcon,
+  GoIcon,
+  RustIcon,
+  PythonIcon,
+  ReactIcon,
+  NextjsIcon,
+  PostgreSqlIcon,
+  RedisIcon,
+  DockerIcon,
+  KafkaIcon,
+  TailwindIcon,
+} from "@/components/Icons";
+
+const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
+  TypeScriptIcon,
+  GoIcon,
+  RustIcon,
+  PythonIcon,
+  ReactIcon,
+  NextjsIcon,
+  PostgreSqlIcon,
+  RedisIcon,
+  DockerIcon,
+  KafkaIcon,
+  TailwindIcon,
+  Cpu,
+};
 
 export default function AdminPage() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [token, setToken] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      return sessionStorage.getItem("razzan_admin_token") || "";
+    }
+    return "";
+  });
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      return Boolean(sessionStorage.getItem("razzan_admin_token"));
+    }
+    return false;
+  });
+
   const [pin, setPin] = useState("");
+  const [showPin, setShowPin] = useState(false);
   const [authError, setAuthError] = useState("");
-  const [activeTab, setActiveTab] = useState<"analytics" | "projects">("analytics");
+  const [activeTab, setActiveTab] = useState<"analytics" | "projects" | "techstack" | "messages" | "security">("analytics");
 
-  // Analytics data (100% REAL)
+  // Telemetry state
   const [analytics, setAnalytics] = useState<AnalyticsSummary | null>(null);
-  const [isLoadingAnalytics, setIsLoadingAnalytics] = useState(false);
+  const [loadingAnalytics, setLoadingAnalytics] = useState(false);
 
-  // Projects data
-  const [projects, setProjects] = useState<Project[]>(INITIAL_PROJECTS);
+  // Projects state
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [projectSearch, setProjectSearch] = useState("");
   const [editingProject, setEditingProject] = useState<Project | null>(null);
-  const [isCreatingNew, setIsCreatingNew] = useState(false);
-  const [crudMessage, setCrudMessage] = useState("");
+  const [isCreatingProject, setIsCreatingProject] = useState(false);
 
-  const { playClick, playSuccess } = useSoundFX();
+  // Tech Stack state
+  const [techStack, setTechStack] = useState<TechStackItem[]>([]);
+  const [editingTech, setEditingTech] = useState<TechStackItem | null>(null);
+  const [isCreatingTech, setIsCreatingTech] = useState(false);
 
-  const loadAnalytics = useCallback(() => {
-    setIsLoadingAnalytics(true);
-    fetch("/api/analytics")
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.success) {
-          setAnalytics(data.data);
-        }
-      })
-      .finally(() => setIsLoadingAnalytics(false));
-  }, []);
+  // Messages state
+  const [messages, setMessages] = useState<ContactMessage[]>([]);
+  const [loadingMessages, setLoadingMessages] = useState(false);
+  const [messageSearch, setMessageSearch] = useState("");
 
-  const loadProjects = useCallback(() => {
-    fetch("/api/projects")
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.success && Array.isArray(data.data)) {
-          setProjects(data.data);
-        }
-      });
-  }, []);
+  // Security state
+  const [currentPinInput, setCurrentPinInput] = useState("");
+  const [newPinInput, setNewPinInput] = useState("");
+  const [confirmPinInput, setConfirmPinInput] = useState("");
+  const [securityStatus, setSecurityStatus] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  // Project Form State
+  const [projForm, setProjForm] = useState<Partial<Project>>({
+    id: "",
+    slug: "",
+    title: "",
+    subtitle: "",
+    category: "Systems & Infrastructure",
+    year: new Date().getFullYear().toString(),
+    role: "Lead Systems Architect",
+    client: "Internal Infra",
+    description: "",
+    highlights: [],
+    metrics: [{ label: "Throughput", value: "1.2M msg/s" }],
+    tags: ["Go", "Kafka", "Docker"],
+    githubUrl: "",
+    liveUrl: "",
+    featured: true,
+    image: "/works/sentinel.png",
+  });
+
+  // Tech Form State
+  const [techForm, setTechForm] = useState<Partial<TechStackItem>>({
+    id: "",
+    name: "",
+    category: "languages",
+    iconName: "TypeScriptIcon",
+    level: "Expert",
+    proficiency: 90,
+    specialization: "",
+    desc: "",
+    sortOrder: 1,
+  });
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -75,697 +142,1323 @@ export default function AdminPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ pin }),
       });
-      const data = await res.json();
 
-      if (data.success) {
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setToken(data.token);
         setIsAuthenticated(true);
-        playSuccess();
-        loadAnalytics();
-        loadProjects();
+        sessionStorage.setItem("razzan_admin_token", data.token);
       } else {
-        setAuthError("Access Denied: Incorrect PIN.");
+        setAuthError(data.error || "Invalid Access Credentials");
       }
     } catch {
-      setAuthError("Failed to connect to authentication server.");
+      setAuthError("Failed to reach authentication gate.");
     }
   };
 
-  const handleClearAnalytics = async () => {
-    if (!confirm("Are you sure you want to clear all telemetry records?")) return;
+  const handleLogout = () => {
+    setIsAuthenticated(false);
+    setToken("");
+    sessionStorage.removeItem("razzan_admin_token");
+    setPin("");
+  };
+
+  // Fetch Telemetry
+  const fetchAnalytics = useCallback(async () => {
+    if (!token) return;
+    setLoadingAnalytics(true);
     try {
-      const res = await fetch("/api/analytics", { method: "DELETE" });
+      const res = await fetch("/api/analytics", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       const data = await res.json();
       if (data.success) {
-        playSuccess();
-        setCrudMessage("Analytics telemetry flushed.");
-        loadAnalytics();
-        setTimeout(() => setCrudMessage(""), 3000);
+        setAnalytics(data.analytics);
       }
     } catch {
-      setCrudMessage("Failed to reset analytics.");
+      // Ignore
+    } finally {
+      setLoadingAnalytics(false);
     }
-  };
+  }, [token]);
 
-  const handleSaveProject = async (project: Project) => {
+  // Fetch Projects
+  const fetchProjects = useCallback(async () => {
     try {
-      const isExisting = projects.some((p) => p.id === project.id);
-      const url = isExisting ? `/api/projects/${project.id}` : "/api/projects";
-      const method = isExisting ? "PUT" : "POST";
+      const res = await fetch("/api/projects");
+      const data = await res.json();
+      if (data.success) {
+        setProjects(data.projects);
+      }
+    } catch {
+      // Ignore
+    }
+  }, []);
 
-      const res = await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(project),
+  // Fetch Tech Stack
+  const fetchTechStack = useCallback(async () => {
+    try {
+      const res = await fetch("/api/techstack");
+      const data = await res.json();
+      if (data.success) {
+        setTechStack(data.items);
+      }
+    } catch {
+      // Ignore
+    }
+  }, []);
+
+  // Fetch Messages
+  const fetchMessages = useCallback(async () => {
+    if (!token) return;
+    setLoadingMessages(true);
+    try {
+      const res = await fetch("/api/messages", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (data.success) {
+        setMessages(data.messages);
+      }
+    } catch {
+      // Ignore
+    } finally {
+      setLoadingMessages(false);
+    }
+  }, [token]);
+
+  // Load active tab data
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    let isMounted = true;
+
+    const loadData = async () => {
+      if (!isMounted) return;
+      if (activeTab === "analytics") await fetchAnalytics();
+      if (activeTab === "projects") await fetchProjects();
+      if (activeTab === "techstack") await fetchTechStack();
+      if (activeTab === "messages") await fetchMessages();
+    };
+
+    loadData();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isAuthenticated, activeTab, fetchAnalytics, fetchProjects, fetchTechStack, fetchMessages]);
+
+  // Save Project Handler
+  const handleSaveProject = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!projForm.title || !projForm.slug) return;
+
+    try {
+      const payload: Project = {
+        id: projForm.id || projForm.slug!,
+        slug: projForm.slug!,
+        title: projForm.title!,
+        subtitle: projForm.subtitle || "",
+        category: (projForm.category as "Full Stack" | "Systems & Infrastructure" | "AI & Cloud" | "Open Source") || "Systems & Infrastructure",
+        year: projForm.year || new Date().getFullYear().toString(),
+        role: projForm.role || "Lead Systems Architect",
+        client: projForm.client || "Open Engineering",
+        description: projForm.description || "",
+        highlights: Array.isArray(projForm.highlights) ? projForm.highlights : [],
+        metrics: Array.isArray(projForm.metrics) ? projForm.metrics : [{ label: "Reliability", value: "100%" }],
+        tags: Array.isArray(projForm.tags) ? projForm.tags : String(projForm.tags).split(",").map((s) => s.trim()).filter(Boolean),
+        githubUrl: projForm.githubUrl || "",
+        liveUrl: projForm.liveUrl || "",
+        featured: Boolean(projForm.featured),
+        image: projForm.image || "/works/sentinel.png",
+      };
+
+      const res = await fetch("/api/projects", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
       });
 
-      const data = await res.json();
-      if (data.success) {
-        playSuccess();
-        setCrudMessage("Project successfully saved!");
+      if (res.ok) {
+        setIsCreatingProject(false);
         setEditingProject(null);
-        setIsCreatingNew(false);
-        loadProjects();
-        setTimeout(() => setCrudMessage(""), 3000);
+        fetchProjects();
       }
     } catch {
-      setCrudMessage("Failed to save project.");
+      // Ignore
     }
   };
 
   const handleDeleteProject = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this project?")) return;
+    if (!confirm(`Are you sure you want to delete project: ${id}?`)) return;
 
     try {
-      const res = await fetch(`/api/projects/${id}`, { method: "DELETE" });
-      const data = await res.json();
-      if (data.success) {
-        playSuccess();
-        setCrudMessage("Project removed from repository.");
-        loadProjects();
-        setTimeout(() => setCrudMessage(""), 3000);
+      const res = await fetch(`/api/projects/${id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (res.ok) {
+        fetchProjects();
       }
     } catch {
-      setCrudMessage("Error deleting project.");
+      // Ignore
     }
   };
 
+  // Save Tech Stack Handler
+  const handleSaveTech = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!techForm.name) return;
+
+    try {
+      const payload = {
+        ...techForm,
+        id: techForm.id || techForm.name.toLowerCase().replace(/[^a-z0-9]/g, "-"),
+      };
+
+      const res = await fetch("/api/techstack", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (res.ok) {
+        setIsCreatingTech(false);
+        setEditingTech(null);
+        fetchTechStack();
+      }
+    } catch {
+      // Ignore
+    }
+  };
+
+  const handleDeleteTech = async (id: string) => {
+    if (!confirm(`Are you sure you want to delete tech: ${id}?`)) return;
+
+    try {
+      const res = await fetch(`/api/techstack/${id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (res.ok) {
+        fetchTechStack();
+      }
+    } catch {
+      // Ignore
+    }
+  };
+
+  // Message Operations
+  const handleToggleMessageRead = async (id: string, currentRead: boolean) => {
+    try {
+      const res = await fetch(`/api/messages/${id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ read: !currentRead }),
+      });
+
+      if (res.ok) {
+        fetchMessages();
+      }
+    } catch {
+      // Ignore
+    }
+  };
+
+  const handleDeleteMessage = async (id: string) => {
+    if (!confirm("Are you sure you want to delete this transmission log?")) return;
+
+    try {
+      const res = await fetch(`/api/messages/${id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (res.ok) {
+        fetchMessages();
+      }
+    } catch {
+      // Ignore
+    }
+  };
+
+  // Change Master PIN Handler
+  const handleChangePin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSecurityStatus(null);
+
+    if (newPinInput !== confirmPinInput) {
+      setSecurityStatus({ type: "error", text: "New PIN and Confirmation PIN do not match." });
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/settings/pin", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ currentPin: currentPinInput, newPin: newPinInput }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setToken(data.newToken);
+        sessionStorage.setItem("razzan_admin_token", data.newToken);
+        setSecurityStatus({ type: "success", text: "Master PIN updated successfully! Store your new PIN securely." });
+        setCurrentPinInput("");
+        setNewPinInput("");
+        setConfirmPinInput("");
+      } else {
+        setSecurityStatus({ type: "error", text: data.error || "Failed to update Master PIN." });
+      }
+    } catch {
+      setSecurityStatus({ type: "error", text: "Network error while updating PIN." });
+    }
+  };
+
+  const unreadCount = messages.filter((m) => !m.read).length;
+
+  // --- LOGIN VIEW ---
   if (!isAuthenticated) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#080808] p-4 font-mono text-white">
-        <div className="w-full max-w-sm border border-neutral-800 bg-[#121212] p-6 shadow-2xl">
-          <div className="flex items-center gap-2 border-b border-neutral-800 pb-3 text-xs text-neutral-400">
-            <Lock className="h-4 w-4 text-[#0066ff]" />
-            <span>ADMIN AUTHENTICATION GATE</span>
+      <main className="min-h-screen w-full bg-[#080808] text-[#f4f4f5] flex items-center justify-center p-4">
+        <div className="w-full max-w-md border border-neutral-800 bg-[#121212] p-6 sm:p-8" style={{ borderRadius: "0px" }}>
+          <div className="flex items-center justify-between border-b border-neutral-800 pb-4 font-mono text-xs text-neutral-400">
+            <div className="flex items-center gap-2 text-white">
+              <Shield className="h-4 w-4 text-[#0066ff]" />
+              <span className="font-bold">SYS_ADMIN.STATION</span>
+            </div>
+            <span>PORT_3000</span>
           </div>
 
-          <form onSubmit={handleLogin} className="mt-6 space-y-4">
-            <div>
-              <label className="block text-[11px] text-neutral-400 uppercase tracking-wider mb-1.5">
-                Enter Master Passcode / PIN
+          <div className="my-6 space-y-1 text-center">
+            <h1 className="text-xl font-bold text-white tracking-tight">Security Clearance</h1>
+            <p className="font-mono text-xs text-neutral-400">
+              Provide Master Access Key to control telemetry, projects, tech arsenal &amp; messages.
+            </p>
+          </div>
+
+          <form onSubmit={handleLogin} className="space-y-4">
+            <div className="relative">
+              <label className="block font-mono text-[11px] uppercase text-neutral-400 mb-1">
+                MASTER ACCESS PIN
               </label>
-              <input
-                type="password"
-                autoFocus
-                value={pin}
-                onChange={(e) => setPin(e.target.value)}
-                placeholder="Default: razzan2026"
-                className="w-full border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-white placeholder:text-neutral-600 outline-none focus:border-[#0066ff]"
-              />
+              <div className="relative">
+                <input
+                  type={showPin ? "text" : "password"}
+                  value={pin}
+                  onChange={(e) => setPin(e.target.value)}
+                  placeholder="Enter Master Security Key"
+                  required
+                  autoFocus
+                  className="w-full border border-neutral-800 bg-neutral-900 px-3.5 py-2.5 font-mono text-sm text-white placeholder:text-neutral-600 outline-none focus:border-[#0066ff]"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPin(!showPin)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-white cursor-pointer"
+                >
+                  {showPin ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
             </div>
 
-            {authError && <div className="text-xs text-rose-500 font-mono">{authError}</div>}
+            {authError && (
+              <div className="border border-red-900/60 bg-red-950/40 p-2.5 font-mono text-xs text-red-400">
+                {authError}
+              </div>
+            )}
 
             <button
               type="submit"
-              className="w-full border border-[#0066ff] bg-[#0066ff] py-2.5 text-xs uppercase tracking-wider text-white font-bold transition-all hover:bg-[#0055ff] cursor-pointer"
+              className="flex w-full items-center justify-center gap-2 border border-neutral-700 bg-white py-2.5 font-mono text-xs font-bold uppercase tracking-wider text-black transition-all hover:bg-[#0066ff] hover:text-white hover:border-[#0066ff] cursor-pointer"
+              style={{ borderRadius: "0px" }}
             >
-              Unlock Control Station ↵
+              <Lock className="h-3.5 w-3.5" />
+              <span>AUTHENTICATE &amp; UNLOCK</span>
             </button>
-
-            <div className="pt-2 text-center text-[10px] text-neutral-600">
-              <Link href="/" className="hover:text-neutral-400">
-                ← Return to Public Portfolio
-              </Link>
-            </div>
           </form>
+
+          <div className="mt-6 border-t border-neutral-800/80 pt-4 flex justify-between font-mono text-[10px] text-neutral-600">
+            <span>RAZZAN.SITE // CMS ENGINE</span>
+            <Link href="/" className="text-neutral-400 hover:text-white">
+              ← Return to Site
+            </Link>
+          </div>
         </div>
-      </div>
+      </main>
     );
   }
 
+  // --- AUTHENTICATED COMMAND CENTER ---
   return (
-    <div className="min-h-screen bg-[#080808] text-[#f4f4f5] font-mono">
-      {/* Top Admin HUD Header */}
-      <header className="sticky top-0 z-40 border-b border-neutral-800 bg-[#0d0d0d]/95 backdrop-blur-md px-4 py-3.5 sm:px-8">
-        <div className="mx-auto flex max-w-[1200px] items-center justify-between">
+    <main className="min-h-screen w-full bg-[#080808] text-[#f4f4f5]">
+      {/* Top Navbar */}
+      <header className="sticky top-0 z-40 border-b border-neutral-800 bg-[#080808]/95 backdrop-blur-md">
+        <div className="mx-auto flex max-w-[1360px] items-center justify-between px-4 py-3 sm:px-6 lg:px-8">
           <div className="flex items-center gap-3">
-            <Shield className="h-4 w-4 text-[#0066ff]" />
-            <span className="font-bold text-sm text-white">RAZZAN CORE // ADMIN PANEL</span>
-            <span className="hidden sm:inline border border-neutral-800 bg-neutral-900 px-2 py-0.5 text-[10px] text-emerald-400">
-              REAL TELEMETRY ACTIVE
+            <Link href="/" className="flex items-center gap-2 font-mono text-xs font-bold text-white">
+              <Shield className="h-4 w-4 text-[#0066ff]" />
+              <span>RAZZAN_CONTROL_CENTER</span>
+            </Link>
+            <span className="hidden sm:inline border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 font-mono text-[10px] text-emerald-400">
+              SYS_AUTHENTICATED
             </span>
           </div>
 
-          <div className="flex items-center gap-4 text-xs">
-            <Link
-              href="/"
-              target="_blank"
-              className="flex items-center gap-1 text-neutral-400 hover:text-white"
-            >
-              <span>View Site</span>
-              <ExternalLink className="h-3 w-3" />
-            </Link>
+          {/* Tab Navigation */}
+          <nav className="flex items-center gap-1 font-mono text-xs overflow-x-auto py-1">
             <button
-              onClick={() => setIsAuthenticated(false)}
-              className="text-neutral-500 hover:text-rose-400 cursor-pointer"
+              onClick={() => setActiveTab("analytics")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 transition-colors cursor-pointer ${
+                activeTab === "analytics" ? "bg-white text-black font-bold" : "text-neutral-400 hover:text-white"
+              }`}
+              style={{ borderRadius: "0px" }}
             >
-              Lock / Exit
+              <Activity className="h-3.5 w-3.5" />
+              <span>Telemetry</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab("projects")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 transition-colors cursor-pointer ${
+                activeTab === "projects" ? "bg-white text-black font-bold" : "text-neutral-400 hover:text-white"
+              }`}
+              style={{ borderRadius: "0px" }}
+            >
+              <FolderGit2 className="h-3.5 w-3.5" />
+              <span>Projects</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab("techstack")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 transition-colors cursor-pointer ${
+                activeTab === "techstack" ? "bg-white text-black font-bold" : "text-neutral-400 hover:text-white"
+              }`}
+              style={{ borderRadius: "0px" }}
+            >
+              <Cpu className="h-3.5 w-3.5" />
+              <span>Tech Arsenal</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab("messages")}
+              className={`relative flex items-center gap-1.5 px-3 py-1.5 transition-colors cursor-pointer ${
+                activeTab === "messages" ? "bg-white text-black font-bold" : "text-neutral-400 hover:text-white"
+              }`}
+              style={{ borderRadius: "0px" }}
+            >
+              <Mail className="h-3.5 w-3.5" />
+              <span>Inbox</span>
+              {unreadCount > 0 && (
+                <span className="ml-1 rounded-full bg-[#0066ff] px-1.5 py-0.2 text-[9px] font-bold text-white">
+                  {unreadCount}
+                </span>
+              )}
+            </button>
+
+            <button
+              onClick={() => setActiveTab("security")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 transition-colors cursor-pointer ${
+                activeTab === "security" ? "bg-white text-black font-bold" : "text-neutral-400 hover:text-white"
+              }`}
+              style={{ borderRadius: "0px" }}
+            >
+              <Lock className="h-3.5 w-3.5" />
+              <span>Security</span>
+            </button>
+          </nav>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleLogout}
+              className="border border-neutral-800 bg-neutral-900 px-3 py-1.5 font-mono text-[11px] text-neutral-400 hover:text-red-400 hover:border-red-900 transition-colors cursor-pointer"
+            >
+              Logout
             </button>
           </div>
         </div>
       </header>
 
-      {/* Main Admin Content */}
-      <main className="mx-auto max-w-[1200px] px-4 py-8 sm:px-8">
-        {/* Navigation Tabs */}
-        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-neutral-800 pb-4">
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => {
-                playClick();
-                setActiveTab("analytics");
-                loadAnalytics();
-              }}
-              className={`flex items-center gap-2 border px-4 py-2 text-xs transition-colors cursor-pointer ${
-                activeTab === "analytics"
-                  ? "border-[#0066ff] bg-[#0066ff] text-white font-bold"
-                  : "border-neutral-800 bg-[#121212] text-neutral-400 hover:border-neutral-700"
-              }`}
-            >
-              <Activity className="h-3.5 w-3.5" />
-              <span>Real-Time Visitor Monitor</span>
-            </button>
-
-            <button
-              onClick={() => {
-                playClick();
-                setActiveTab("projects");
-                loadProjects();
-              }}
-              className={`flex items-center gap-2 border px-4 py-2 text-xs transition-colors cursor-pointer ${
-                activeTab === "projects"
-                  ? "border-[#0066ff] bg-[#0066ff] text-white font-bold"
-                  : "border-neutral-800 bg-[#121212] text-neutral-400 hover:border-neutral-700"
-              }`}
-            >
-              <FolderGit2 className="h-3.5 w-3.5" />
-              <span>Project CMS ({projects.length})</span>
-            </button>
-          </div>
-
-          <div className="flex items-center gap-3">
-            {crudMessage && (
-              <div className="flex items-center gap-1.5 text-xs text-emerald-400">
-                <Check className="h-4 w-4" />
-                <span>{crudMessage}</span>
-              </div>
-            )}
-
-            {activeTab === "analytics" && (
-              <button
-                onClick={handleClearAnalytics}
-                className="flex items-center gap-1 text-[11px] text-neutral-500 hover:text-rose-400 transition-colors cursor-pointer"
-                title="Reset all recorded traffic telemetry"
-              >
-                <RotateCcw className="h-3 w-3" />
-                <span>Clear Telemetry</span>
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* --- TAB 1: VISITOR ANALYTICS (REAL CLOUDFLARE/PLAUSIBLE TELEMETRY) --- */}
+      {/* Main Command Workspace */}
+      <div className="mx-auto max-w-[1360px] p-4 sm:p-6 lg:px-8 py-6">
+        {/* ======================================================== */}
+        {/* TAB 1: TELEMETRY & ANALYTICS                             */}
+        {/* ======================================================== */}
         {activeTab === "analytics" && (
-          <div className="mt-8 space-y-8">
-            {/* KPI Cards */}
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <div className="border border-neutral-800 bg-[#121212] p-5">
-                <div className="flex items-center justify-between text-xs text-neutral-400">
-                  <span>TOTAL REAL PAGEVIEWS</span>
-                  <Eye className="h-4 w-4 text-[#0066ff]" />
-                </div>
-                <div className="mt-3 text-3xl font-bold text-white">
-                  {analytics?.totalViews.toLocaleString() ?? "0"}
-                </div>
-                <div className="mt-1 text-[11px] text-neutral-500">Live request hits</div>
+          <div className="space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-neutral-800 pb-4">
+              <div>
+                <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight">Real-Time Traffic &amp; Telemetry</h2>
+                <p className="font-mono text-xs text-neutral-400">
+                  Direct stream of incoming requests, device breakdowns, and pageview telemetry.
+                </p>
               </div>
 
-              <div className="border border-neutral-800 bg-[#121212] p-5">
-                <div className="flex items-center justify-between text-xs text-neutral-400">
-                  <span>UNIQUE VISITORS</span>
-                  <Users className="h-4 w-4 text-emerald-400" />
-                </div>
-                <div className="mt-3 text-3xl font-bold text-white">
-                  {analytics?.uniqueVisitors.toLocaleString() ?? "0"}
-                </div>
-                <div className="mt-1 text-[11px] text-neutral-500">Unique fingerprint sessions</div>
-              </div>
-
-              <div className="border border-neutral-800 bg-[#121212] p-5">
-                <div className="flex items-center justify-between text-xs text-neutral-400">
-                  <span>LAST 24 HOURS</span>
-                  <Activity className="h-4 w-4 text-amber-400" />
-                </div>
-                <div className="mt-3 text-3xl font-bold text-white">
-                  {analytics?.todayViews.toLocaleString() ?? "0"}
-                </div>
-                <div className="mt-1 text-[11px] text-neutral-500">Recent active visits</div>
-              </div>
-
-              <div className="border border-neutral-800 bg-[#121212] p-5">
-                <div className="flex items-center justify-between text-xs text-neutral-400">
-                  <span>TELEMETRY STATE</span>
-                  <span className="h-2.5 w-2.5 rounded-full bg-emerald-400 animate-ping" />
-                </div>
-                <div className="mt-3 text-3xl font-bold text-emerald-400">ONLINE</div>
-                <div className="mt-1 text-[11px] text-neutral-500">Real-time DB recording</div>
-              </div>
-            </div>
-
-            {/* 7-Day Traffic Graph */}
-            <div className="border border-neutral-800 bg-[#121212] p-6">
-              <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
-                <div className="text-xs font-semibold text-white">
-                  {"// 7-DAY REAL TRAFFIC TREND (PAGEVIEWS & VISITORS)"}
-                </div>
+              <div className="flex items-center gap-3">
                 <button
-                  onClick={loadAnalytics}
-                  className="flex items-center gap-1 text-[11px] text-neutral-400 hover:text-white cursor-pointer"
+                  onClick={fetchAnalytics}
+                  disabled={loadingAnalytics}
+                  className="flex items-center gap-1.5 border border-neutral-800 bg-neutral-900 px-3 py-2 font-mono text-xs text-neutral-300 hover:border-white transition-colors cursor-pointer"
                 >
-                  <RefreshCw className={`h-3 w-3 ${isLoadingAnalytics ? "animate-spin" : ""}`} />
+                  <RefreshCw className={`h-3.5 w-3.5 ${loadingAnalytics ? "animate-spin" : ""}`} />
                   <span>Refresh</span>
                 </button>
               </div>
-
-              {analytics?.totalViews === 0 ? (
-                <div className="my-12 text-center text-xs text-neutral-500 font-mono">
-                  No visits recorded yet. Browse the public portfolio or /project pages to generate live telemetry!
-                </div>
-              ) : (
-                <div className="mt-6 flex h-48 items-end gap-3 sm:gap-6 border-b border-neutral-800 pb-2">
-                  {analytics?.dailyViews.map((day) => {
-                    const maxView = Math.max(...(analytics.dailyViews.map((d) => d.views) || [1]), 5);
-                    const heightPercent = day.views > 0 ? Math.max(14, (day.views / maxView) * 100) : 4;
-
-                    return (
-                      <div key={day.date} className="flex-1 flex flex-col items-center gap-2 h-full justify-end group">
-                        <div className="text-[10px] text-neutral-400 opacity-0 group-hover:opacity-100 transition-opacity font-bold">
-                          {day.views}
-                        </div>
-                        <div
-                          className={`w-full transition-all ${
-                            day.views > 0 ? "bg-[#0066ff] hover:bg-[#0088ff]" : "bg-neutral-800/40"
-                          }`}
-                          style={{ height: `${heightPercent}%` }}
-                        />
-                        <div className="text-[10px] text-neutral-500">{day.date}</div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
             </div>
 
-            {/* Breakdown Grids */}
-            <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-              {/* Top Viewed Projects */}
+            {/* KPI Cards */}
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 font-mono">
               <div className="border border-neutral-800 bg-[#121212] p-5">
-                <div className="text-xs font-semibold text-white border-b border-neutral-800 pb-3">
-                  TOP VIEWED PROJECTS
-                </div>
-                <div className="mt-4 space-y-3">
-                  {analytics?.topProjects.length === 0 ? (
-                    <div className="text-xs text-neutral-500 py-3">No project clicks logged yet.</div>
-                  ) : (
-                    analytics?.topProjects.map((item, idx) => (
-                      <div key={item.slug} className="flex items-center justify-between text-xs">
-                        <div className="truncate pr-2">
-                          <span className="text-neutral-500 mr-1.5">0{idx + 1}</span>
-                          <span className="text-neutral-200">{item.title}</span>
-                        </div>
-                        <span className="font-bold text-[#0066ff]">{item.views} views</span>
-                      </div>
-                    ))
-                  )}
-                </div>
+                <div className="text-[11px] text-neutral-500 uppercase">TOTAL REQUESTS</div>
+                <div className="mt-2 text-3xl font-bold text-white">{analytics?.totalViews || 0}</div>
+                <div className="mt-1 text-[10px] text-neutral-400">100% Real Live Logs</div>
               </div>
 
-              {/* Referrers */}
               <div className="border border-neutral-800 bg-[#121212] p-5">
-                <div className="text-xs font-semibold text-white border-b border-neutral-800 pb-3 flex items-center gap-1.5">
-                  <Globe className="h-3.5 w-3.5 text-[#0066ff]" />
-                  <span>TRAFFIC SOURCES</span>
-                </div>
-                <div className="mt-4 space-y-3">
-                  {analytics?.referrers.length === 0 ? (
-                    <div className="text-xs text-neutral-500 py-3">No referrer data logged yet.</div>
-                  ) : (
-                    analytics?.referrers.map((ref) => (
-                      <div key={ref.source} className="flex items-center justify-between text-xs">
-                        <span className="text-neutral-300 truncate">{ref.source}</span>
-                        <span className="text-neutral-400 font-bold">{ref.count}</span>
-                      </div>
-                    ))
-                  )}
-                </div>
+                <div className="text-[11px] text-neutral-500 uppercase">UNIQUE VISITORS</div>
+                <div className="mt-2 text-3xl font-bold text-[#0066ff]">{analytics?.uniqueVisitors || 0}</div>
+                <div className="mt-1 text-[10px] text-neutral-400">Distinct IP / Browser Hashes</div>
               </div>
 
-              {/* Device Breakdown */}
               <div className="border border-neutral-800 bg-[#121212] p-5">
-                <div className="text-xs font-semibold text-white border-b border-neutral-800 pb-3 flex items-center gap-1.5">
-                  <Monitor className="h-3.5 w-3.5 text-emerald-400" />
-                  <span>DEVICE BREAKDOWN</span>
-                </div>
-                <div className="mt-4 space-y-3">
-                  {analytics?.devices.length === 0 ? (
-                    <div className="text-xs text-neutral-500 py-3">No device data logged yet.</div>
-                  ) : (
-                    analytics?.devices.map((d) => (
-                      <div key={d.device} className="flex items-center justify-between text-xs">
-                        <div className="flex items-center gap-2">
-                          {d.device === "mobile" ? (
-                            <Smartphone className="h-3.5 w-3.5 text-neutral-400" />
-                          ) : (
-                            <Monitor className="h-3.5 w-3.5 text-neutral-400" />
-                          )}
-                          <span className="capitalize text-neutral-300">{d.device}</span>
-                        </div>
-                        <span className="font-bold text-neutral-400">{d.count} hits</span>
-                      </div>
-                    ))
-                  )}
-                </div>
+                <div className="text-[11px] text-neutral-500 uppercase">TODAY&apos;S TRAFFIC (24H)</div>
+                <div className="mt-2 text-3xl font-bold text-emerald-400">{analytics?.todayViews || 0}</div>
+                <div className="mt-1 text-[10px] text-neutral-400">Live Window</div>
+              </div>
+
+              <div className="border border-neutral-800 bg-[#121212] p-5">
+                <div className="text-[11px] text-neutral-500 uppercase">SYSTEM UPTIME</div>
+                <div className="mt-2 text-3xl font-bold text-white">99.98%</div>
+                <div className="mt-1 text-[10px] text-neutral-400">Turbopack Node Runtime</div>
               </div>
             </div>
 
-            {/* Real-time Live Event Log Table */}
-            <div className="border border-neutral-800 bg-[#121212] p-6">
-              <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
-                <div className="flex items-center gap-2 text-xs font-semibold text-white">
-                  <Clock className="h-3.5 w-3.5 text-emerald-400" />
-                  <span>REAL-TIME LIVE TELEMETRY LOGS (LATEST {analytics?.recentEvents.length || 0} REQUESTS)</span>
-                </div>
-                <span className="text-[10px] text-neutral-500">Auto-streamed</span>
+            {/* Recent Live Events Table */}
+            <div className="border border-neutral-800 bg-[#121212]">
+              <div className="border-b border-neutral-800 p-4 font-mono text-xs font-bold text-white flex justify-between items-center">
+                <span>RECENT TELEMETRY REQUEST STREAM</span>
+                <span className="text-neutral-500 text-[10px] font-normal">Auto-logged on navigation</span>
               </div>
 
-              {analytics?.recentEvents.length === 0 ? (
-                <div className="py-8 text-center text-xs text-neutral-500">
-                  No requests recorded in database.
-                </div>
-              ) : (
-                <div className="mt-4 overflow-x-auto">
-                  <table className="w-full text-left text-xs font-mono">
-                    <thead>
-                      <tr className="border-b border-neutral-800 text-neutral-500 text-[10px]">
-                        <th className="py-2 pr-4">TIME</th>
-                        <th className="py-2 pr-4">PATH</th>
-                        <th className="py-2 pr-4">SOURCE / REFERRER</th>
-                        <th className="py-2 pr-4">DEVICE / BROWSER</th>
-                        <th className="py-2 text-right">SESSION HASH</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-neutral-800/60 text-neutral-300">
-                      {analytics?.recentEvents.map((evt) => (
-                        <tr key={evt.id} className="hover:bg-neutral-900/50">
-                          <td className="py-2.5 pr-4 text-neutral-500 text-[11px] whitespace-nowrap">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left font-mono text-xs">
+                  <thead className="border-b border-neutral-800 bg-neutral-900/50 text-[10px] uppercase text-neutral-400">
+                    <tr>
+                      <th className="p-3">Time</th>
+                      <th className="p-3">Path</th>
+                      <th className="p-3">Referrer</th>
+                      <th className="p-3">Device</th>
+                      <th className="p-3">Browser</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-neutral-800/60 text-neutral-300">
+                    {analytics?.recentEvents && analytics.recentEvents.length > 0 ? (
+                      analytics.recentEvents.map((evt) => (
+                        <tr key={evt.id} className="hover:bg-neutral-900/30">
+                          <td className="p-3 text-neutral-500 whitespace-nowrap">
                             {new Date(evt.timestamp).toLocaleTimeString()}
                           </td>
-                          <td className="py-2.5 pr-4 font-semibold text-white">
-                            {evt.path}
-                          </td>
-                          <td className="py-2.5 pr-4 text-neutral-400 truncate max-w-[160px]">
-                            {evt.referrer}
-                          </td>
-                          <td className="py-2.5 pr-4 text-neutral-400 capitalize">
-                            {evt.device} • {evt.browser}
-                          </td>
-                          <td className="py-2.5 text-right text-neutral-500 font-mono text-[10px]">
-                            {evt.ipHash}
-                          </td>
+                          <td className="p-3 font-semibold text-white whitespace-nowrap">{evt.path}</td>
+                          <td className="p-3 text-neutral-400 whitespace-nowrap">{evt.referrer || "Direct"}</td>
+                          <td className="p-3 capitalize">{evt.device}</td>
+                          <td className="p-3 text-neutral-400">{evt.browser}</td>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={5} className="p-6 text-center text-neutral-500">
+                          No pageview telemetry events recorded yet. Navigate through the site to generate live traffic!
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         )}
 
-        {/* --- TAB 2: PROJECT CMS (CRUD) --- */}
+        {/* ======================================================== */}
+        {/* TAB 2: PROJECTS MANAGEMENT (CMS)                         */}
+        {/* ======================================================== */}
         {activeTab === "projects" && (
-          <div className="mt-8 space-y-6">
-            <div className="flex items-center justify-between">
+          <div className="space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-neutral-800 pb-4">
               <div>
-                <h2 className="text-base font-bold text-white">Project Catalog Repository</h2>
-                <p className="text-xs text-neutral-500">Manage all showcase systems, case studies, and tags.</p>
+                <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight">Project Management &amp; Case Studies</h2>
+                <p className="font-mono text-xs text-neutral-400">
+                  Create, edit, and curate fullstack engineering case studies and benchmarks.
+                </p>
               </div>
 
-              <button
-                onClick={() => {
-                  playClick();
-                  setEditingProject({
-                    id: "sys-" + Math.random().toString(36).substring(2, 6),
-                    slug: "new-system",
-                    title: "New Distributed System",
-                    subtitle: "High-performance architecture engine",
-                    category: "Systems & Infrastructure",
-                    role: "Lead Engineer",
-                    year: "2026",
-                    description: "Comprehensive system architecture breakdown...",
-                    highlights: [
-                      "Designed zero-allocation data pipeline",
-                      "Benchmarked sub-millisecond p99 latency",
-                    ],
-                    metrics: [
-                      { label: "Throughput", value: "100k req/s" },
-                      { label: "Latency", value: "< 1.5ms" },
-                      { label: "Uptime", value: "99.99%" },
-                    ],
-                    tags: ["Go", "TypeScript", "Next.js", "PostgreSQL"],
-                    liveUrl: "https://github.com/YuZann81",
-                    githubUrl: "https://github.com/YuZann81",
-                    featured: true,
-                    image: "/next.svg",
-                  });
-                  setIsCreatingNew(true);
-                }}
-                className="flex items-center gap-1.5 border border-[#0066ff] bg-[#0066ff] px-3.5 py-2 text-xs text-white font-bold hover:bg-[#0055ff] cursor-pointer"
-              >
-                <Plus className="h-3.5 w-3.5" />
-                <span>Add New Project</span>
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => {
+                    setProjForm({
+                      id: "",
+                      slug: "",
+                      title: "",
+                      subtitle: "",
+                      category: "Systems & Infrastructure",
+                      year: new Date().getFullYear().toString(),
+                      role: "Lead Systems Architect",
+                      client: "Internal Infra",
+                      description: "",
+                      highlights: [],
+                      metrics: [{ label: "Throughput", value: "1.2M msg/s" }],
+                      tags: ["Go", "Kafka", "Docker"],
+                      githubUrl: "",
+                      liveUrl: "",
+                      featured: true,
+                      image: "/works/sentinel.png",
+                    });
+                    setIsCreatingProject(true);
+                    setEditingProject(null);
+                  }}
+                  className="flex items-center gap-1.5 border border-white bg-white px-4 py-2 font-mono text-xs font-bold uppercase text-black hover:bg-[#0066ff] hover:text-white hover:border-[#0066ff] transition-all cursor-pointer"
+                  style={{ borderRadius: "0px" }}
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  <span>New Project</span>
+                </button>
+              </div>
             </div>
 
             {/* Project List */}
-            <div className="divide-y divide-neutral-800 border border-neutral-800 bg-[#121212]">
-              {projects.map((project, idx) => (
-                <div
-                  key={project.id}
-                  className="flex flex-col sm:flex-row sm:items-center justify-between p-4 gap-4 hover:bg-neutral-900/60"
-                >
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2 text-xs">
-                      <span className="text-neutral-500">0{idx + 1}</span>
-                      <span className="font-bold text-white text-sm">{project.title}</span>
-                      <span className="border border-neutral-800 bg-neutral-950 px-2 py-0.5 text-[10px] text-neutral-400">
-                        {project.category}
-                      </span>
-                    </div>
-                    <p className="text-xs text-neutral-400 line-clamp-1">{project.subtitle}</p>
-                    <div className="flex items-center gap-3 text-[11px] text-neutral-500 pt-1">
-                      <span>Slug: /project/{project.slug}</span>
-                      <span>•</span>
-                      <span>Year: {project.year}</span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 shrink-0">
-                    <Link
-                      href={`/project/${project.slug}`}
-                      target="_blank"
-                      className="border border-neutral-700 bg-neutral-800 px-3 py-1.5 text-xs text-neutral-300 hover:text-white"
-                    >
-                      Preview
-                    </Link>
-
-                    <button
-                      onClick={() => {
-                        playClick();
-                        setEditingProject(project);
-                        setIsCreatingNew(false);
-                      }}
-                      className="flex items-center gap-1 border border-neutral-700 bg-neutral-800 px-3 py-1.5 text-xs text-neutral-300 hover:text-white cursor-pointer"
-                    >
-                      <Edit className="h-3 w-3" />
-                      <span>Edit</span>
-                    </button>
-
-                    <button
-                      onClick={() => handleDeleteProject(project.id)}
-                      className="border border-neutral-800 bg-neutral-900 p-1.5 text-rose-400 hover:bg-rose-950/40 cursor-pointer"
-                      title="Delete Project"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
+            {!isCreatingProject && !editingProject && (
+              <div className="space-y-4">
+                <div className="relative">
+                  <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-500" />
+                  <input
+                    type="text"
+                    value={projectSearch}
+                    onChange={(e) => setProjectSearch(e.target.value)}
+                    placeholder="Search projects by title, slug, or tech stack..."
+                    className="w-full border border-neutral-800 bg-[#121212] pl-10 pr-4 py-2.5 font-mono text-xs text-white placeholder:text-neutral-600 outline-none focus:border-[#0066ff]"
+                  />
                 </div>
-              ))}
-            </div>
 
-            {/* Project Edit / Create Modal Form */}
-            {editingProject && (
-              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-xs">
-                <div className="relative max-h-[90vh] w-full max-w-2xl overflow-y-auto border border-[#0066ff] bg-[#121212] p-6 shadow-2xl">
-                  <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
-                    <h3 className="text-sm font-bold text-white">
-                      {isCreatingNew ? "Create New Production System" : `Edit Project // ${editingProject.slug}`}
-                    </h3>
-                    <button
-                      onClick={() => setEditingProject(null)}
-                      className="text-neutral-500 hover:text-white cursor-pointer"
-                    >
-                      ✕
-                    </button>
-                  </div>
-
-                  <form
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      handleSaveProject(editingProject);
-                    }}
-                    className="mt-5 space-y-4 text-xs"
-                  >
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-neutral-400 mb-1">Project Title</label>
-                        <input
-                          type="text"
-                          required
-                          value={editingProject.title}
-                          onChange={(e) => setEditingProject({ ...editingProject, title: e.target.value })}
-                          className="w-full border border-neutral-700 bg-neutral-900 p-2 text-white outline-none focus:border-[#0066ff]"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-neutral-400 mb-1">URL Slug (e.g. sentinel-core)</label>
-                        <input
-                          type="text"
-                          required
-                          value={editingProject.slug}
-                          onChange={(e) => setEditingProject({ ...editingProject, slug: e.target.value })}
-                          className="w-full border border-neutral-700 bg-neutral-900 p-2 text-white outline-none focus:border-[#0066ff]"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                      <div>
-                        <label className="block text-neutral-400 mb-1">Category</label>
-                        <select
-                          value={editingProject.category}
-                          onChange={(e) => setEditingProject({ ...editingProject, category: e.target.value as Project["category"] })}
-                          className="w-full border border-neutral-700 bg-neutral-900 p-2 text-white outline-none focus:border-[#0066ff]"
-                        >
-                          <option value="Systems & Infrastructure">Systems & Infrastructure</option>
-                          <option value="Full Stack">Full Stack</option>
-                          <option value="AI & Cloud">AI & Cloud</option>
-                          <option value="Open Source">Open Source</option>
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="block text-neutral-400 mb-1">Engineering Role</label>
-                        <input
-                          type="text"
-                          value={editingProject.role}
-                          onChange={(e) => setEditingProject({ ...editingProject, role: e.target.value })}
-                          className="w-full border border-neutral-700 bg-neutral-900 p-2 text-white outline-none focus:border-[#0066ff]"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-neutral-400 mb-1">Year</label>
-                        <input
-                          type="text"
-                          value={editingProject.year}
-                          onChange={(e) => setEditingProject({ ...editingProject, year: e.target.value })}
-                          className="w-full border border-neutral-700 bg-neutral-900 p-2 text-white outline-none focus:border-[#0066ff]"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-neutral-400 mb-1">Subtitle / Short Summary</label>
-                      <input
-                        type="text"
-                        value={editingProject.subtitle}
-                        onChange={(e) => setEditingProject({ ...editingProject, subtitle: e.target.value })}
-                        className="w-full border border-neutral-700 bg-neutral-900 p-2 text-white outline-none focus:border-[#0066ff]"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-neutral-400 mb-1">Architecture & Problem Statement</label>
-                      <textarea
-                        rows={4}
-                        value={editingProject.description}
-                        onChange={(e) => setEditingProject({ ...editingProject, description: e.target.value })}
-                        className="w-full border border-neutral-700 bg-neutral-900 p-2 text-white outline-none focus:border-[#0066ff] resize-none"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-neutral-400 mb-1">Tech Stack Tags (Comma Separated)</label>
-                      <input
-                        type="text"
-                        value={editingProject.tags.join(", ")}
-                        onChange={(e) =>
-                          setEditingProject({
-                            ...editingProject,
-                            tags: e.target.value.split(",").map((t) => t.trim()).filter(Boolean),
-                          })
-                        }
-                        placeholder="Go, Rust, TypeScript, Next.js"
-                        className="w-full border border-neutral-700 bg-neutral-900 p-2 text-white outline-none focus:border-[#0066ff]"
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-neutral-400 mb-1">Live URL Demo</label>
-                        <input
-                          type="text"
-                          value={editingProject.liveUrl || ""}
-                          onChange={(e) => setEditingProject({ ...editingProject, liveUrl: e.target.value })}
-                          className="w-full border border-neutral-700 bg-neutral-900 p-2 text-white outline-none focus:border-[#0066ff]"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-neutral-400 mb-1">GitHub Repo URL</label>
-                        <input
-                          type="text"
-                          value={editingProject.githubUrl || ""}
-                          onChange={(e) => setEditingProject({ ...editingProject, githubUrl: e.target.value })}
-                          className="w-full border border-neutral-700 bg-neutral-900 p-2 text-white outline-none focus:border-[#0066ff]"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-end gap-3 pt-4 border-t border-neutral-800">
-                      <button
-                        type="button"
-                        onClick={() => setEditingProject(null)}
-                        className="border border-neutral-700 px-4 py-2 text-neutral-400 hover:text-white"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="submit"
-                        className="border border-[#0066ff] bg-[#0066ff] px-5 py-2 text-white font-bold hover:bg-[#0055ff] cursor-pointer"
-                      >
-                        Save Project Spec ↵
-                      </button>
-                    </div>
-                  </form>
+                <div className="border border-neutral-800 bg-[#121212]">
+                  <table className="w-full text-left font-mono text-xs">
+                    <thead className="border-b border-neutral-800 bg-neutral-900/50 text-[10px] uppercase text-neutral-400">
+                      <tr>
+                        <th className="p-3">Title &amp; Slug</th>
+                        <th className="p-3">Category</th>
+                        <th className="p-3">Role</th>
+                        <th className="p-3">Tags</th>
+                        <th className="p-3">Featured</th>
+                        <th className="p-3 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-neutral-800/60 text-neutral-300">
+                      {projects
+                        .filter((p) =>
+                          p.title.toLowerCase().includes(projectSearch.toLowerCase()) ||
+                          p.slug.toLowerCase().includes(projectSearch.toLowerCase())
+                        )
+                        .map((p) => (
+                          <tr key={p.id} className="hover:bg-neutral-900/30">
+                            <td className="p-3">
+                              <div className="font-bold text-white">{p.title}</div>
+                              <div className="text-[10px] text-neutral-500">/project/{p.slug}</div>
+                            </td>
+                            <td className="p-3 text-neutral-400">{p.category}</td>
+                            <td className="p-3 text-neutral-400">{p.role}</td>
+                            <td className="p-3 text-neutral-400">
+                              <div className="flex flex-wrap gap-1">
+                                {p.tags.slice(0, 3).map((t) => (
+                                  <span key={t} className="border border-neutral-800 bg-neutral-900 px-1.5 py-0.5 text-[9px]">
+                                    {t}
+                                  </span>
+                                ))}
+                                {p.tags.length > 3 && <span className="text-[9px]">+{p.tags.length - 3}</span>}
+                              </div>
+                            </td>
+                            <td className="p-3">
+                              {p.featured ? (
+                                <span className="border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] text-emerald-400">
+                                  FEATURED
+                                </span>
+                              ) : (
+                                <span className="text-[10px] text-neutral-600">Archive</span>
+                              )}
+                            </td>
+                            <td className="p-3 text-right">
+                              <div className="flex items-center justify-end gap-2">
+                                <Link
+                                  href={`/project/${p.slug}`}
+                                  target="_blank"
+                                  className="p-1 text-neutral-400 hover:text-white"
+                                  title="View Case Study"
+                                >
+                                  <ExternalLink className="h-3.5 w-3.5" />
+                                </Link>
+                                <button
+                                  onClick={() => {
+                                    setProjForm({ ...p });
+                                    setEditingProject(p);
+                                  }}
+                                  className="p-1 text-neutral-400 hover:text-[#0066ff] cursor-pointer"
+                                  title="Edit Project"
+                                >
+                                  <Edit className="h-3.5 w-3.5" />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteProject(p.id)}
+                                  className="p-1 text-neutral-400 hover:text-red-400 cursor-pointer"
+                                  title="Delete Project"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             )}
+
+            {/* Project Create / Edit Form */}
+            {(isCreatingProject || editingProject) && (
+              <form onSubmit={handleSaveProject} className="border border-neutral-800 bg-[#121212] p-6 space-y-5 font-mono text-xs">
+                <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
+                  <h3 className="font-bold text-white text-sm">
+                    {editingProject ? `Edit Project: ${editingProject.title}` : "Create New Production Project"}
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsCreatingProject(false);
+                      setEditingProject(null);
+                    }}
+                    className="text-neutral-400 hover:text-white cursor-pointer"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div>
+                    <label className="block text-[10px] uppercase text-neutral-400 mb-1">Project Title *</label>
+                    <input
+                      type="text"
+                      required
+                      value={projForm.title || ""}
+                      onChange={(e) => setProjForm({ ...projForm, title: e.target.value })}
+                      placeholder="e.g. Sentinel Distributed Core"
+                      className="w-full border border-neutral-800 bg-neutral-900 p-2.5 text-white outline-none focus:border-[#0066ff]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] uppercase text-neutral-400 mb-1">Slug URL Identifier *</label>
+                    <input
+                      type="text"
+                      required
+                      value={projForm.slug || ""}
+                      onChange={(e) => setProjForm({ ...projForm, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "-") })}
+                      placeholder="e.g. sentinel-core"
+                      className="w-full border border-neutral-800 bg-neutral-900 p-2.5 text-white outline-none focus:border-[#0066ff]"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                  <div>
+                    <label className="block text-[10px] uppercase text-neutral-400 mb-1">Category *</label>
+                    <select
+                      value={projForm.category || "Systems & Infrastructure"}
+                      onChange={(e) => setProjForm({ ...projForm, category: e.target.value as "Full Stack" | "Systems & Infrastructure" | "AI & Cloud" | "Open Source" })}
+                      className="w-full border border-neutral-800 bg-neutral-900 p-2.5 text-white outline-none focus:border-[#0066ff]"
+                    >
+                      <option value="Systems & Infrastructure">Systems &amp; Infrastructure</option>
+                      <option value="Full Stack">Full Stack</option>
+                      <option value="AI & Cloud">AI &amp; Cloud</option>
+                      <option value="Open Source">Open Source</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] uppercase text-neutral-400 mb-1">Year</label>
+                    <input
+                      type="text"
+                      value={projForm.year || ""}
+                      onChange={(e) => setProjForm({ ...projForm, year: e.target.value })}
+                      placeholder="2026"
+                      className="w-full border border-neutral-800 bg-neutral-900 p-2.5 text-white outline-none focus:border-[#0066ff]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] uppercase text-neutral-400 mb-1">Role / Responsibility</label>
+                    <input
+                      type="text"
+                      value={projForm.role || ""}
+                      onChange={(e) => setProjForm({ ...projForm, role: e.target.value })}
+                      placeholder="e.g. Lead Systems Architect"
+                      className="w-full border border-neutral-800 bg-neutral-900 p-2.5 text-white outline-none focus:border-[#0066ff]"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] uppercase text-neutral-400 mb-1">Subtitle / Punchline</label>
+                  <input
+                    type="text"
+                    value={projForm.subtitle || ""}
+                    onChange={(e) => setProjForm({ ...projForm, subtitle: e.target.value })}
+                    placeholder="Brief 1-line architecture punchline..."
+                    className="w-full border border-neutral-800 bg-neutral-900 p-2.5 text-white outline-none focus:border-[#0066ff]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] uppercase text-neutral-400 mb-1">Tags / Technologies (comma separated)</label>
+                  <input
+                    type="text"
+                    value={Array.isArray(projForm.tags) ? projForm.tags.join(", ") : projForm.tags || ""}
+                    onChange={(e) => setProjForm({ ...projForm, tags: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) })}
+                    placeholder="Go, Kafka, Docker, Redis"
+                    className="w-full border border-neutral-800 bg-neutral-900 p-2.5 text-white outline-none focus:border-[#0066ff]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] uppercase text-neutral-400 mb-1">Deep-Dive Case Study Description</label>
+                  <textarea
+                    rows={4}
+                    value={projForm.description || ""}
+                    onChange={(e) => setProjForm({ ...projForm, description: e.target.value })}
+                    placeholder="Detailed architecture breakdown, concurrency model, and execution semantics..."
+                    className="w-full border border-neutral-800 bg-neutral-900 p-2.5 text-white outline-none focus:border-[#0066ff] resize-none"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div>
+                    <label className="block text-[10px] uppercase text-neutral-400 mb-1">GitHub Repo URL</label>
+                    <input
+                      type="text"
+                      value={projForm.githubUrl || ""}
+                      onChange={(e) => setProjForm({ ...projForm, githubUrl: e.target.value })}
+                      placeholder="https://github.com/..."
+                      className="w-full border border-neutral-800 bg-neutral-900 p-2.5 text-white outline-none focus:border-[#0066ff]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] uppercase text-neutral-400 mb-1">Live Deployment URL</label>
+                    <input
+                      type="text"
+                      value={projForm.liveUrl || ""}
+                      onChange={(e) => setProjForm({ ...projForm, liveUrl: e.target.value })}
+                      placeholder="https://..."
+                      className="w-full border border-neutral-800 bg-neutral-900 p-2.5 text-white outline-none focus:border-[#0066ff]"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 pt-2">
+                  <input
+                    type="checkbox"
+                    id="featured-check"
+                    checked={Boolean(projForm.featured)}
+                    onChange={(e) => setProjForm({ ...projForm, featured: e.target.checked })}
+                    className="h-4 w-4 cursor-pointer"
+                  />
+                  <label htmlFor="featured-check" className="text-white cursor-pointer select-none">
+                    Show as Featured on Landing Page
+                  </label>
+                </div>
+
+                <div className="flex justify-end gap-3 pt-4 border-t border-neutral-800">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsCreatingProject(false);
+                      setEditingProject(null);
+                    }}
+                    className="border border-neutral-800 bg-neutral-900 px-4 py-2 text-neutral-400 hover:text-white cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="border border-white bg-white px-5 py-2 font-bold text-black hover:bg-[#0066ff] hover:text-white hover:border-[#0066ff] transition-all cursor-pointer"
+                  >
+                    {editingProject ? "Update Project" : "Create Project"}
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         )}
-      </main>
-    </div>
+
+        {/* ======================================================== */}
+        {/* TAB 3: TECH ARSENAL CMS                                  */}
+        {/* ======================================================== */}
+        {activeTab === "techstack" && (
+          <div className="space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-neutral-800 pb-4">
+              <div>
+                <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight">Technical Arsenal Manager</h2>
+                <p className="font-mono text-xs text-neutral-400">
+                  Add, update, or reorder technologies, skill levels, and architecture specialties.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => {
+                    setTechForm({
+                      id: "",
+                      name: "",
+                      category: "languages",
+                      iconName: "TypeScriptIcon",
+                      level: "Expert",
+                      proficiency: 90,
+                      specialization: "",
+                      desc: "",
+                      sortOrder: techStack.length + 1,
+                    });
+                    setIsCreatingTech(true);
+                    setEditingTech(null);
+                  }}
+                  className="flex items-center gap-1.5 border border-white bg-white px-4 py-2 font-mono text-xs font-bold uppercase text-black hover:bg-[#0066ff] hover:text-white hover:border-[#0066ff] transition-all cursor-pointer"
+                  style={{ borderRadius: "0px" }}
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  <span>Add Tech Item</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Tech List */}
+            {!isCreatingTech && !editingTech && (
+              <div className="border border-neutral-800 bg-[#121212]">
+                <table className="w-full text-left font-mono text-xs">
+                  <thead className="border-b border-neutral-800 bg-neutral-900/50 text-[10px] uppercase text-neutral-400">
+                    <tr>
+                      <th className="p-3">Order</th>
+                      <th className="p-3">Technology</th>
+                      <th className="p-3">Category</th>
+                      <th className="p-3">Proficiency</th>
+                      <th className="p-3">Specialization</th>
+                      <th className="p-3 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-neutral-800/60 text-neutral-300">
+                    {techStack.map((t) => {
+                      const IconComp = ICON_MAP[t.iconName] || Cpu;
+                      return (
+                        <tr key={t.id} className="hover:bg-neutral-900/30">
+                          <td className="p-3 text-neutral-500 font-bold">#{t.sortOrder}</td>
+                          <td className="p-3 font-semibold text-white">
+                            <div className="flex items-center gap-2">
+                              <div className="flex h-6 w-6 items-center justify-center border border-neutral-800 bg-neutral-900 text-white">
+                                <IconComp className="h-3.5 w-3.5" />
+                              </div>
+                              <span>{t.name}</span>
+                            </div>
+                          </td>
+                          <td className="p-3 capitalize text-neutral-400">{t.category}</td>
+                          <td className="p-3">
+                            <span className="font-bold text-[#0066ff]">{t.proficiency}%</span>{" "}
+                            <span className="text-neutral-500">({t.level})</span>
+                          </td>
+                          <td className="p-3 text-neutral-400">{t.specialization}</td>
+                          <td className="p-3 text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                onClick={() => {
+                                  setTechForm({ ...t });
+                                  setEditingTech(t);
+                                }}
+                                className="p-1 text-neutral-400 hover:text-[#0066ff] cursor-pointer"
+                                title="Edit Item"
+                              >
+                                <Edit className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteTech(t.id)}
+                                className="p-1 text-neutral-400 hover:text-red-400 cursor-pointer"
+                                title="Delete Item"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* Tech Create / Edit Form */}
+            {(isCreatingTech || editingTech) && (
+              <form onSubmit={handleSaveTech} className="border border-neutral-800 bg-[#121212] p-6 space-y-4 font-mono text-xs">
+                <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
+                  <h3 className="font-bold text-white text-sm">
+                    {editingTech ? `Edit Tech: ${editingTech.name}` : "Add Technology to Arsenal"}
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsCreatingTech(false);
+                      setEditingTech(null);
+                    }}
+                    className="text-neutral-400 hover:text-white cursor-pointer"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                  <div>
+                    <label className="block text-[10px] uppercase text-neutral-400 mb-1">Tech Name *</label>
+                    <input
+                      type="text"
+                      required
+                      value={techForm.name || ""}
+                      onChange={(e) => setTechForm({ ...techForm, name: e.target.value })}
+                      placeholder="e.g. Rust"
+                      className="w-full border border-neutral-800 bg-neutral-900 p-2.5 text-white outline-none focus:border-[#0066ff]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] uppercase text-neutral-400 mb-1">Category *</label>
+                    <select
+                      value={techForm.category || "languages"}
+                      onChange={(e) => setTechForm({ ...techForm, category: e.target.value as "languages" | "systems" | "frontend" })}
+                      className="w-full border border-neutral-800 bg-neutral-900 p-2.5 text-white outline-none focus:border-[#0066ff]"
+                    >
+                      <option value="languages">Languages</option>
+                      <option value="systems">Backend &amp; Distributed Systems</option>
+                      <option value="frontend">Frontend &amp; Performance</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] uppercase text-neutral-400 mb-1">Icon Identifier</label>
+                    <select
+                      value={techForm.iconName || "TypeScriptIcon"}
+                      onChange={(e) => setTechForm({ ...techForm, iconName: e.target.value })}
+                      className="w-full border border-neutral-800 bg-neutral-900 p-2.5 text-white outline-none focus:border-[#0066ff]"
+                    >
+                      <option value="TypeScriptIcon">TypeScript</option>
+                      <option value="GoIcon">Go (Golang)</option>
+                      <option value="RustIcon">Rust</option>
+                      <option value="PythonIcon">Python</option>
+                      <option value="NextjsIcon">Next.js</option>
+                      <option value="ReactIcon">React</option>
+                      <option value="PostgreSqlIcon">PostgreSQL</option>
+                      <option value="RedisIcon">Redis</option>
+                      <option value="KafkaIcon">Kafka</option>
+                      <option value="DockerIcon">Docker</option>
+                      <option value="TailwindIcon">Tailwind CSS</option>
+                      <option value="Cpu">General Compute / Web Canvas</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                  <div>
+                    <label className="block text-[10px] uppercase text-neutral-400 mb-1">Proficiency % (1-100)</label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={100}
+                      value={techForm.proficiency || 90}
+                      onChange={(e) => setTechForm({ ...techForm, proficiency: Number(e.target.value) })}
+                      className="w-full border border-neutral-800 bg-neutral-900 p-2.5 text-white outline-none focus:border-[#0066ff]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] uppercase text-neutral-400 mb-1">Level Label</label>
+                    <input
+                      type="text"
+                      value={techForm.level || "Expert"}
+                      onChange={(e) => setTechForm({ ...techForm, level: e.target.value })}
+                      placeholder="Expert / Advanced / Intermediate"
+                      className="w-full border border-neutral-800 bg-neutral-900 p-2.5 text-white outline-none focus:border-[#0066ff]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] uppercase text-neutral-400 mb-1">Sort Order</label>
+                    <input
+                      type="number"
+                      value={techForm.sortOrder || 1}
+                      onChange={(e) => setTechForm({ ...techForm, sortOrder: Number(e.target.value) })}
+                      className="w-full border border-neutral-800 bg-neutral-900 p-2.5 text-white outline-none focus:border-[#0066ff]"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] uppercase text-neutral-400 mb-1">Architectural Specialization Badge</label>
+                  <input
+                    type="text"
+                    value={techForm.specialization || ""}
+                    onChange={(e) => setTechForm({ ...techForm, specialization: e.target.value })}
+                    placeholder="e.g. Zero-Allocation Memory Pools & Goroutines"
+                    className="w-full border border-neutral-800 bg-neutral-900 p-2.5 text-white outline-none focus:border-[#0066ff]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] uppercase text-neutral-400 mb-1">Description</label>
+                  <textarea
+                    rows={2}
+                    value={techForm.desc || ""}
+                    onChange={(e) => setTechForm({ ...techForm, desc: e.target.value })}
+                    placeholder="Technical description of capabilities..."
+                    className="w-full border border-neutral-800 bg-neutral-900 p-2.5 text-white outline-none focus:border-[#0066ff] resize-none"
+                  />
+                </div>
+
+                <div className="flex justify-end gap-3 pt-3 border-t border-neutral-800">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsCreatingTech(false);
+                      setEditingTech(null);
+                    }}
+                    className="border border-neutral-800 bg-neutral-900 px-4 py-2 text-neutral-400 hover:text-white cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="border border-white bg-white px-5 py-2 font-bold text-black hover:bg-[#0066ff] hover:text-white hover:border-[#0066ff] transition-all cursor-pointer"
+                  >
+                    {editingTech ? "Update Tech" : "Add Tech"}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        )}
+
+        {/* ======================================================== */}
+        {/* TAB 4: TRANSMISSION INBOX / MESSAGES                     */}
+        {/* ======================================================== */}
+        {activeTab === "messages" && (
+          <div className="space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-neutral-800 pb-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight">Transmission Inbox</h2>
+                  {unreadCount > 0 && (
+                    <span className="border border-[#0066ff] bg-[#0066ff]/20 px-2 py-0.5 font-mono text-xs text-[#0066ff] font-bold">
+                      {unreadCount} UNREAD
+                    </span>
+                  )}
+                </div>
+                <p className="font-mono text-xs text-neutral-400">
+                  Direct client inquiries transmitted from the Contact section.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={fetchMessages}
+                  disabled={loadingMessages}
+                  className="flex items-center gap-1.5 border border-neutral-800 bg-neutral-900 px-3 py-2 font-mono text-xs text-neutral-300 hover:border-white transition-colors cursor-pointer"
+                >
+                  <RefreshCw className={`h-3.5 w-3.5 ${loadingMessages ? "animate-spin" : ""}`} />
+                  <span>Refresh</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="relative">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-500" />
+              <input
+                type="text"
+                value={messageSearch}
+                onChange={(e) => setMessageSearch(e.target.value)}
+                placeholder="Search messages by sender name, email, or content..."
+                className="w-full border border-neutral-800 bg-[#121212] pl-10 pr-4 py-2.5 font-mono text-xs text-white placeholder:text-neutral-600 outline-none focus:border-[#0066ff]"
+              />
+            </div>
+
+            {/* Messages Stream */}
+            <div className="space-y-3 font-mono text-xs">
+              {messages.length === 0 ? (
+                <div className="border border-neutral-800 bg-[#121212] p-12 text-center text-neutral-500">
+                  <Inbox className="mx-auto h-8 w-8 text-neutral-600 mb-2" />
+                  <div>No transmissions logged yet.</div>
+                  <div className="text-[11px] text-neutral-600 mt-1">
+                    When someone sends a message via the Contact Form on your portfolio, it will arrive here in real time!
+                  </div>
+                </div>
+              ) : (
+                messages
+                  .filter((m) =>
+                    m.name.toLowerCase().includes(messageSearch.toLowerCase()) ||
+                    m.email.toLowerCase().includes(messageSearch.toLowerCase()) ||
+                    m.message.toLowerCase().includes(messageSearch.toLowerCase())
+                  )
+                  .map((m) => (
+                    <div
+                      key={m.id}
+                      className={`border p-5 transition-all ${
+                        m.read
+                          ? "border-neutral-800 bg-[#121212] text-neutral-300"
+                          : "border-[#0066ff]/60 bg-neutral-900/60 text-white shadow-sm"
+                      }`}
+                    >
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-neutral-800 pb-3">
+                        <div className="flex items-center gap-3">
+                          <span
+                            className={`h-2 w-2 rounded-full ${m.read ? "bg-neutral-600" : "bg-[#0066ff] animate-pulse"}`}
+                          />
+                          <span className="font-bold text-sm text-white">{m.name}</span>
+                          <span className="text-neutral-400">({m.email})</span>
+                        </div>
+
+                        <div className="flex items-center gap-3 text-[11px] text-neutral-500">
+                          <div className="flex items-center gap-1">
+                            <Clock className="h-3 w-3" />
+                            <span>{new Date(m.timestamp).toLocaleString()}</span>
+                          </div>
+
+                          <a
+                            href={`mailto:${m.email}?subject=RE: Transmission via Razzan.site`}
+                            className="flex items-center gap-1 border border-neutral-700 bg-neutral-800 px-2 py-1 text-white hover:bg-[#0066ff] hover:border-[#0066ff] transition-colors"
+                          >
+                            <Send className="h-3 w-3" />
+                            <span>Reply</span>
+                          </a>
+
+                          <button
+                            onClick={() => handleToggleMessageRead(m.id, m.read)}
+                            className="border border-neutral-800 bg-neutral-900 px-2 py-1 hover:text-white cursor-pointer"
+                          >
+                            {m.read ? "Mark Unread" : "Mark Read"}
+                          </button>
+
+                          <button
+                            onClick={() => handleDeleteMessage(m.id)}
+                            className="text-neutral-500 hover:text-red-400 p-1 cursor-pointer"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </div>
+
+                      <p className="mt-3.5 font-sans text-sm text-neutral-300 whitespace-pre-wrap leading-relaxed">
+                        {m.message}
+                      </p>
+                    </div>
+                  ))
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ======================================================== */}
+        {/* TAB 5: SECURITY & MASTER PIN                             */}
+        {/* ======================================================== */}
+        {activeTab === "security" && (
+          <div className="max-w-2xl space-y-6">
+            <div className="border-b border-neutral-800 pb-4">
+              <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight">Security &amp; Access Controls</h2>
+              <p className="font-mono text-xs text-neutral-400">
+                Update Master PIN credentials and review security invariants.
+              </p>
+            </div>
+
+            {/* Change Master PIN Card */}
+            <div className="border border-neutral-800 bg-[#121212] p-6 space-y-5">
+              <div className="flex items-center gap-2 border-b border-neutral-800 pb-3 font-mono text-xs font-bold text-white">
+                <KeyRound className="h-4 w-4 text-[#0066ff]" />
+                <span>ROTATE MASTER SECURITY PIN</span>
+              </div>
+
+              {securityStatus && (
+                <div
+                  className={`p-3 font-mono text-xs border ${
+                    securityStatus.type === "success"
+                      ? "border-emerald-500/50 bg-emerald-950/40 text-emerald-300"
+                      : "border-red-500/50 bg-red-950/40 text-red-300"
+                  }`}
+                >
+                  {securityStatus.text}
+                </div>
+              )}
+
+              <form onSubmit={handleChangePin} className="space-y-4 font-mono text-xs">
+                <div>
+                  <label className="block text-[10px] uppercase text-neutral-400 mb-1">Current Master PIN *</label>
+                  <input
+                    type="password"
+                    required
+                    value={currentPinInput}
+                    onChange={(e) => setCurrentPinInput(e.target.value)}
+                    placeholder="Enter current PIN"
+                    className="w-full border border-neutral-800 bg-neutral-900 p-2.5 text-white outline-none focus:border-[#0066ff]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] uppercase text-neutral-400 mb-1">New Master Security PIN *</label>
+                  <input
+                    type="password"
+                    required
+                    value={newPinInput}
+                    onChange={(e) => setNewPinInput(e.target.value)}
+                    placeholder="Minimum 6 characters, complex combination"
+                    className="w-full border border-neutral-800 bg-neutral-900 p-2.5 text-white outline-none focus:border-[#0066ff]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] uppercase text-neutral-400 mb-1">Confirm New PIN *</label>
+                  <input
+                    type="password"
+                    required
+                    value={confirmPinInput}
+                    onChange={(e) => setConfirmPinInput(e.target.value)}
+                    placeholder="Re-enter new PIN"
+                    className="w-full border border-neutral-800 bg-neutral-900 p-2.5 text-white outline-none focus:border-[#0066ff]"
+                  />
+                </div>
+
+                <div className="pt-2">
+                  <button
+                    type="submit"
+                    className="border border-white bg-white px-5 py-2.5 font-bold uppercase text-black hover:bg-[#0066ff] hover:text-white hover:border-[#0066ff] transition-all cursor-pointer"
+                    style={{ borderRadius: "0px" }}
+                  >
+                    Update Security PIN
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+      </div>
+    </main>
   );
 }

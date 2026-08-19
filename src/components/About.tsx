@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Shield, Zap, Terminal, Code2, Cpu, CheckCircle2, Layers } from "lucide-react";
 import {
   TypeScriptIcon,
@@ -18,21 +18,174 @@ import {
 import { useSoundFX } from "../hooks/useSoundFX";
 import AnimateOnScroll from "./AnimateOnScroll";
 
-interface TechItem {
+const ICON_COMPONENTS: Record<string, React.ComponentType<{ className?: string }>> = {
+  TypeScriptIcon,
+  GoIcon,
+  RustIcon,
+  PythonIcon,
+  ReactIcon,
+  NextjsIcon,
+  PostgreSqlIcon,
+  RedisIcon,
+  DockerIcon,
+  KafkaIcon,
+  TailwindIcon,
+  Cpu,
+};
+
+interface TechDisplayItem {
+  id: string;
   name: string;
   category: "languages" | "systems" | "frontend";
-  icon: React.ComponentType<{ className?: string }>;
+  iconName: string;
   level: string;
   proficiency: number;
   specialization: string;
   desc: string;
 }
 
+const DEFAULT_STACK: TechDisplayItem[] = [
+  {
+    id: "ts",
+    name: "TypeScript",
+    category: "languages",
+    iconName: "TypeScriptIcon",
+    level: "Expert",
+    proficiency: 98,
+    specialization: "Type-Level Metaprogramming & AST Transforms",
+    desc: "Strict type contracts, generic variance, branded types, and high-performance Next.js application runtimes.",
+  },
+  {
+    id: "go",
+    name: "Go (Golang)",
+    category: "languages",
+    iconName: "GoIcon",
+    level: "Advanced",
+    proficiency: 94,
+    specialization: "Zero-Allocation Memory Pools & Goroutines",
+    desc: "High-concurrency microservices, gRPC stream multiplexing, and custom event broker pipelines.",
+  },
+  {
+    id: "rust",
+    name: "Rust",
+    category: "languages",
+    iconName: "RustIcon",
+    level: "Intermediate",
+    proficiency: 82,
+    specialization: "Memory Safety & WebAssembly Compute",
+    desc: "Zero-cost abstractions, memory safety without GC overhead, and low-latency systems programming.",
+  },
+  {
+    id: "python",
+    name: "Python",
+    category: "languages",
+    iconName: "PythonIcon",
+    level: "Advanced",
+    proficiency: 90,
+    specialization: "Vector Search & Multi-Agent Orchestration",
+    desc: "Async FastAPI backends, semantic embedding indexing, and deterministic LLM tool validation.",
+  },
+  {
+    id: "nextjs",
+    name: "Next.js 16",
+    category: "frontend",
+    iconName: "NextjsIcon",
+    level: "Expert",
+    proficiency: 96,
+    specialization: "App Router & Server Components SSR",
+    desc: "Turbopack builds, dynamic edge routes, optimistic mutations, and zero-bundle server logic.",
+  },
+  {
+    id: "react",
+    name: "React 19",
+    category: "frontend",
+    iconName: "ReactIcon",
+    level: "Expert",
+    proficiency: 96,
+    specialization: "Concurrent Rendering & Action Hooks",
+    desc: "Deterministic state management, useSyncExternalStore primitives, and Lighthouse 100 optimization.",
+  },
+  {
+    id: "postgres",
+    name: "PostgreSQL 17",
+    category: "systems",
+    iconName: "PostgreSqlIcon",
+    level: "Expert",
+    proficiency: 92,
+    specialization: "ACID Isolation & Complex Index Tuning",
+    desc: "Query plan analysis (EXPLAIN ANALYZE), table partitioning, connection pooling, and read-replicas.",
+  },
+  {
+    id: "redis",
+    name: "Redis 7.2",
+    category: "systems",
+    iconName: "RedisIcon",
+    level: "Expert",
+    proficiency: 94,
+    specialization: "Distributed Locks & Atomic Token Buckets",
+    desc: "High-throughput in-memory caching topologies, pub/sub channels, and sub-millisecond key-value lookups.",
+  },
+  {
+    id: "kafka",
+    name: "Apache Kafka",
+    category: "systems",
+    iconName: "KafkaIcon",
+    level: "Advanced",
+    proficiency: 88,
+    specialization: "Partition Strategies & Consumer Balancing",
+    desc: "Event sourcing, distributed log serialization, backpressure handling, and real-time data streaming.",
+  },
+  {
+    id: "docker",
+    name: "Docker & Linux",
+    category: "systems",
+    iconName: "DockerIcon",
+    level: "Advanced",
+    proficiency: 90,
+    specialization: "MicroVM Sandboxing & Multi-Stage Builds",
+    desc: "Minimal container images, Linux kernel primitives, systemd orchestration, and CI/CD pipelines.",
+  },
+  {
+    id: "tailwind",
+    name: "Tailwind CSS v4",
+    category: "frontend",
+    iconName: "TailwindIcon",
+    level: "Expert",
+    proficiency: 98,
+    specialization: "Modern Design Tokens & Mathematical Grids",
+    desc: "Zero-runtime CSS variable architecture, dark/light theme tokens, and responsive layout math.",
+  },
+  {
+    id: "canvas",
+    name: "Web Canvas 2D / Audio",
+    category: "frontend",
+    iconName: "Cpu",
+    level: "Advanced",
+    proficiency: 88,
+    specialization: "120 FPS Physics & Synthesized Audio",
+    desc: "Interactive particle gravitation, inertial lerp math, and zero-latency Web Audio soundscapes.",
+  },
+];
+
 export default function About() {
   const { playHover, playClick } = useSoundFX();
   const [activeCategory, setActiveCategory] = useState<string>("all");
   const [mousePosition, setMousePosition] = useState({ x: -1000, y: -1000 });
+  const [techStack, setTechStack] = useState<TechDisplayItem[]>(DEFAULT_STACK);
   const gridRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    fetch("/api/techstack")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && data.items && data.items.length > 0) {
+          setTechStack(data.items);
+        }
+      })
+      .catch(() => {
+        // Fallback to default
+      });
+  }, []);
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!gridRef.current) return;
@@ -43,119 +196,8 @@ export default function About() {
     });
   };
 
-  const techStack: TechItem[] = [
-    {
-      name: "TypeScript",
-      category: "languages",
-      icon: TypeScriptIcon,
-      level: "Expert",
-      proficiency: 98,
-      specialization: "Type-Level Metaprogramming & AST Transforms",
-      desc: "Strict type contracts, generic variance, branded types, and high-performance Next.js application runtimes.",
-    },
-    {
-      name: "Go (Golang)",
-      category: "languages",
-      icon: GoIcon,
-      level: "Advanced",
-      proficiency: 94,
-      specialization: "Zero-Allocation Memory Pools & Goroutines",
-      desc: "High-concurrency microservices, gRPC stream multiplexing, and custom event broker pipelines.",
-    },
-    {
-      name: "Rust",
-      category: "languages",
-      icon: RustIcon,
-      level: "Intermediate",
-      proficiency: 82,
-      specialization: "Memory Safety & WebAssembly Compute",
-      desc: "Zero-cost abstractions, memory safety without GC overhead, and low-latency systems programming.",
-    },
-    {
-      name: "Python",
-      category: "languages",
-      icon: PythonIcon,
-      level: "Advanced",
-      proficiency: 90,
-      specialization: "Vector Search & Multi-Agent Orchestration",
-      desc: "Async FastAPI backends, semantic embedding indexing, and deterministic LLM tool validation.",
-    },
-    {
-      name: "Next.js 16",
-      category: "frontend",
-      icon: NextjsIcon,
-      level: "Expert",
-      proficiency: 96,
-      specialization: "App Router & Server Components SSR",
-      desc: "Turbopack builds, dynamic edge routes, optimistic mutations, and zero-bundle server logic.",
-    },
-    {
-      name: "React 19",
-      category: "frontend",
-      icon: ReactIcon,
-      level: "Expert",
-      proficiency: 96,
-      specialization: "Concurrent Rendering & Action Hooks",
-      desc: "Deterministic state management, useSyncExternalStore primitives, and Lighthouse 100 optimization.",
-    },
-    {
-      name: "PostgreSQL 17",
-      category: "systems",
-      icon: PostgreSqlIcon,
-      level: "Expert",
-      proficiency: 92,
-      specialization: "ACID Isolation & Complex Index Tuning",
-      desc: "Query plan analysis (EXPLAIN ANALYZE), table partitioning, connection pooling, and read-replicas.",
-    },
-    {
-      name: "Redis 7.2",
-      category: "systems",
-      icon: RedisIcon,
-      level: "Expert",
-      proficiency: 94,
-      specialization: "Distributed Locks & Atomic Token Buckets",
-      desc: "High-throughput in-memory caching topologies, pub/sub channels, and sub-millisecond key-value lookups.",
-    },
-    {
-      name: "Apache Kafka",
-      category: "systems",
-      icon: KafkaIcon,
-      level: "Advanced",
-      proficiency: 88,
-      specialization: "Partition Strategies & Consumer Balancing",
-      desc: "Event sourcing, distributed log serialization, backpressure handling, and real-time data streaming.",
-    },
-    {
-      name: "Docker & Linux",
-      category: "systems",
-      icon: DockerIcon,
-      level: "Advanced",
-      proficiency: 90,
-      specialization: "MicroVM Sandboxing & Multi-Stage Builds",
-      desc: "Minimal container images, Linux kernel primitives, systemd orchestration, and CI/CD pipelines.",
-    },
-    {
-      name: "Tailwind CSS v4",
-      category: "frontend",
-      icon: TailwindIcon,
-      level: "Expert",
-      proficiency: 98,
-      specialization: "Modern Design Tokens & Mathematical Grids",
-      desc: "Zero-runtime CSS variable architecture, dark/light theme tokens, and responsive layout math.",
-    },
-    {
-      name: "Web Canvas 2D / Audio",
-      category: "frontend",
-      icon: Cpu,
-      level: "Advanced",
-      proficiency: 88,
-      specialization: "120 FPS Physics & Synthesized Audio",
-      desc: "Interactive particle gravitation, inertial lerp math, and zero-latency Web Audio soundscapes.",
-    },
-  ];
-
   const categories = [
-    { key: "all", label: "All Arsenal (12)" },
+    { key: "all", label: `All Arsenal (${techStack.length})` },
     { key: "languages", label: "Core Languages" },
     { key: "systems", label: "Backend & Systems Infra" },
     { key: "frontend", label: "Frontend & Performance" },
@@ -292,7 +334,7 @@ export default function About() {
             className="relative mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3"
           >
             {filteredStack.map((tech, idx) => {
-              const Icon = tech.icon;
+              const Icon = ICON_COMPONENTS[tech.iconName] || Cpu;
 
               return (
                 <AnimateOnScroll key={tech.name} direction="up" delay={idx * 60}>

@@ -1,16 +1,30 @@
 import { NextResponse } from "next/server";
+import { getAdminPin } from "@/lib/db";
 
 export async function POST(request: Request) {
   try {
-    const { pin } = await request.json();
-    const correctPin = process.env.ADMIN_PIN || "razzan2026";
+    const body = await request.json();
+    const { pin } = body;
 
-    if (pin === correctPin) {
-      return NextResponse.json({ success: true, token: "session_" + Date.now() });
+    const masterPin = getAdminPin();
+
+    if (!pin || pin !== masterPin) {
+      return NextResponse.json(
+        { success: false, error: "Access Denied: Invalid Master PIN." },
+        { status: 401 }
+      );
     }
 
-    return NextResponse.json({ success: false, error: "Invalid PIN code." }, { status: 401 });
-  } catch {
-    return NextResponse.json({ success: false, error: "Authentication failed." }, { status: 500 });
+    return NextResponse.json({
+      success: true,
+      token: masterPin,
+      user: {
+        role: "SYS_ADMIN",
+        scope: ["analytics", "cms_projects", "cms_techstack", "messages_inbox", "system_settings"],
+      },
+    });
+  } catch (err: unknown) {
+    const errorMessage = err instanceof Error ? err.message : "Internal Server Error";
+    return NextResponse.json({ success: false, error: errorMessage }, { status: 500 });
   }
 }
