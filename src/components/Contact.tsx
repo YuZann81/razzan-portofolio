@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Send, Copy, Check, Terminal, ExternalLink } from "lucide-react";
+import { Send, Copy, Check, Terminal, ExternalLink, AlertTriangle } from "lucide-react";
 import { GithubIcon } from "./Icons";
 import { useSoundFX } from "../hooks/useSoundFX";
 import AnimateOnScroll from "./AnimateOnScroll";
@@ -13,6 +13,7 @@ export default function Contact() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [error, setError] = useState("");
 
   const copyEmail = () => {
     navigator.clipboard.writeText("razzan.gianni@gmail.com");
@@ -39,7 +40,9 @@ export default function Contact() {
 
     setIsSubmitting(true);
     playClick();
+    setError("");
 
+    let serverError = "Transmission failed. Please try again or reach me directly via email.";
     try {
       const res = await fetch("/api/contact", {
         method: "POST",
@@ -48,7 +51,13 @@ export default function Contact() {
       });
 
       if (!res.ok) {
-        throw new Error("Failed to transmit message");
+        try {
+          const data = await res.json();
+          if (data?.error) serverError = data.error;
+        } catch {
+          // Keep default message
+        }
+        throw new Error(serverError);
       }
 
       setSubmitted(true);
@@ -66,10 +75,7 @@ export default function Contact() {
         // Confetti fallback
       }
     } catch {
-      // Offline fallback simulation
-      setSubmitted(true);
-      playSuccess();
-      setFormData({ name: "", email: "", message: "" });
+      setError(serverError);
     } finally {
       setIsSubmitting(false);
     }
@@ -224,6 +230,13 @@ export default function Contact() {
                         className="w-full border-b border-theme bg-transparent py-2 font-mono text-base sm:text-sm text-theme-fg placeholder:text-theme-dim outline-none transition-colors focus:border-theme-fg resize-none"
                       />
                     </div>
+
+                    {error && (
+                      <div className="flex items-start gap-2 border border-red-500/40 bg-red-500/10 p-3 font-mono text-xs text-red-500" style={{ borderRadius: "0px" }}>
+                        <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                        <span>{error}</span>
+                      </div>
+                    )}
 
                     <div className="pt-2">
                       <button

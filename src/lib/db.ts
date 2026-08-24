@@ -337,19 +337,15 @@ export function saveContactMessage(msg: Omit<ContactMessage, "id" | "timestamp" 
     read: false,
   };
 
-  try {
-    const data = fs.readFileSync(MESSAGES_FILE, "utf-8");
-    const messages: ContactMessage[] = JSON.parse(data);
-    messages.unshift(newMessage); // Newest first
+  const data = fs.readFileSync(MESSAGES_FILE, "utf-8");
+  const messages: ContactMessage[] = JSON.parse(data);
+  messages.unshift(newMessage); // Newest first
 
-    if (messages.length > 1000) {
-      messages.splice(1000);
-    }
-
-    fs.writeFileSync(MESSAGES_FILE, JSON.stringify(messages, null, 2), "utf-8");
-  } catch {
-    // Ignore error
+  if (messages.length > 1000) {
+    messages.splice(1000);
   }
+
+  fs.writeFileSync(MESSAGES_FILE, JSON.stringify(messages, null, 2), "utf-8");
 
   return newMessage;
 }
